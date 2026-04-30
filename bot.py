@@ -4,12 +4,10 @@ from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQu
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import threading
 
-
 # ========== CONFIGURE THESE ==========
-REPO = "eartinityop/compress"        # e.g. "johndoe/video-compressor"
+REPO = "eartinityop/compress"       # e.g. "johndoe/video-compressor"
 WF_FILE = "compress.yml"               # workflow file name
 GITHUB_TOKEN = os.environ["GITHUB_TOKEN"]
-GROUP_CHAT_ID = -1003971999326        # your private group ID (negative for supergroup)
 # =====================================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -18,10 +16,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def video_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Forward the video to the private group (NO download)
-    forwarded = await update.message.forward(GROUP_CHAT_ID)
-    context.user_data["fwd_msg_id"] = forwarded.message_id
-    context.user_data["chat_id"] = update.message.chat_id
+    # Store original message_id and user_id (the user's private chat ID)
+    context.user_data["msg_id"] = update.message.message_id
+    context.user_data["user_id"] = update.message.chat_id   # e.g., 123456789 (positive number)
 
     keyboard = [
         [InlineKeyboardButton("Compress this video ✅", callback_data="compress")],
@@ -58,29 +55,28 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if data.startswith("quality_"):
         quality = data.split("_")[1]
-        fwd_msg_id = context.user_data.get("fwd_msg_id")
-        user_chat_id = context.user_data.get("chat_id")
+        msg_id = context.user_data.get("msg_id")
+        user_id = context.user_data.get("user_id")
 
-        if not fwd_msg_id or not user_chat_id:
+        if not msg_id or not user_id:
             await query.edit_message_text("Error: Missing video info.")
             return
 
-        # Send a new message that will be updated by the workflow
+        # Progress message
         sent_msg = await query.message.reply_text("⏳ Triggering workflow...")
         progress_msg_id = sent_msg.message_id
 
-        # Trigger GitHub Actions workflow
+        # GitHub trigger
         url = f"https://api.github.com/repos/{REPO}/actions/workflows/{WF_FILE}/dispatches"
         headers = {
             "Authorization": f"token {GITHUB_TOKEN}",
             "Accept": "application/vnd.github+json"
         }
         payload = {
-            "ref": "main",   # your branch
+            "ref": "main",
             "inputs": {
-                "fwd_message_id": str(fwd_msg_id),
-                "group_chat_id": str(GROUP_CHAT_ID),
-                "user_chat_id": str(user_chat_id),
+                "original_message_id": str(msg_id),
+                "user_id": str(user_id),
                 "quality": quality,
                 "message_id": str(progress_msg_id)
             }
@@ -98,12 +94,6 @@ def main():
     app.add_handler(MessageHandler(filters.VIDEO, video_handler))
     app.add_handler(CallbackQueryHandler(button_handler))
     app.run_polling()
-
-class HealthHandler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(b"OK")
 
 def start_health_server():
     port = int(os.environ.get("PORT", 8000))   # Render provides PORT
