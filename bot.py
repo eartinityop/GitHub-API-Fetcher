@@ -7,7 +7,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQu
 REPO = "eartinityop/compress"
 WF_FILE = "compress.yml"
 GITHUB_TOKEN = os.environ["GITHUB_TOKEN"]
-CHANNEL_USERNAME = compresslog   
+CHANNEL_USERNAME = "compresslog"   
 # =====================================
 
 # ---------- Health server for Render ----------
