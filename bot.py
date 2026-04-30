@@ -30,7 +30,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def video_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Forward the video to the private channel
-    forwarded = await update.message.forward(CHANNEL_USERNAME)
+    forwarded = await update.message.forward(f"@{CHANNEL_USERNAME})
     context.user_data["fwd_msg_id"] = forwarded.message_id
     context.user_data["user_id"] = update.message.chat_id
 
@@ -108,7 +108,7 @@ async def post_init(application: Application):
 
 async def test(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        msg = await context.bot.send_message(chat_id="compresslog", text="Bot is alive!")
+        msg = await context.bot.send_message(chat_id=f"@{CHANNEL_USERNAME}", text="Bot is alive!")
         await update.message.reply_text(f"✅ Message sent to channel: {msg.message_id}")
     except Exception as e:
         await update.message.reply_text(f"❌ Error: {e}")
