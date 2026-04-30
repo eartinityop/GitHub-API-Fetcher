@@ -29,6 +29,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def video_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Save the original message ID (in the user's chat) for the reply‑to
+    context.user_data["original_msg_id"] = update.message.message_id
+
     # Forward the video to the private channel
     forwarded = await update.message.forward(f"@{CHANNEL_USERNAME}")
     context.user_data["fwd_msg_id"] = forwarded.message_id
@@ -71,8 +74,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         quality = data.split("_")[1]
         fwd_msg_id = context.user_data.get("fwd_msg_id")
         user_id = context.user_data.get("user_id")
+        original_msg_id = context.user_data.get("original_msg_id")
 
-        if not fwd_msg_id or not user_id:
+        if not fwd_msg_id or not user_id or not original_msg_id:
             await query.edit_message_text("Error: Missing video info.")
             return
 
@@ -92,7 +96,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "fwd_message_id": str(fwd_msg_id),
                 "user_id": str(user_id),
                 "quality": quality,
-                "message_id": str(progress_msg_id)
+                "message_id": str(progress_msg_id),
+                "original_message_id": str(original_msg_id)     # <-- new
             }
         }
         resp = requests.post(url, json=payload, headers=headers)
