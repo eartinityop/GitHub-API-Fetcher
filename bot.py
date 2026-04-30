@@ -4,13 +4,13 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 
 # ========== CONFIGURE THESE ==========
-REPO = "eartinityop/compress"
-WF_FILE = "compress.yml"
+REPO = "eartinityop/compress"        # e.g., "johndoe/video-compressor"
+WF_FILE = "compress.yml"               # workflow file name
 GITHUB_TOKEN = os.environ["GITHUB_TOKEN"]
 # =====================================
 
-# We'll store the bot's own user ID after startup
-BOT_ID = None
+# We'll store the bot's username after startup
+BOT_USERNAME = None
 
 # ---------- Health server for Render ----------
 class HealthHandler(BaseHTTPRequestHandler):
@@ -32,7 +32,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def video_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["msg_id"] = update.message.message_id
-    context.user_data["user_id"] = update.message.chat_id   # your ID (still needed for sending progress)
+    context.user_data["user_id"] = update.message.chat_id
 
     keyboard = [
         [InlineKeyboardButton("Compress this video ✅", callback_data="compress")],
@@ -88,8 +88,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "ref": "main",
             "inputs": {
                 "original_message_id": str(msg_id),
-                "bot_id": str(BOT_ID),          # <-- THE FIX
-                "user_id": str(user_id),        # still needed for progress updates
+                "bot_username": BOT_USERNAME,       # <-- using username
+                "user_id": str(user_id),
                 "quality": quality,
                 "message_id": str(progress_msg_id)
             }
@@ -102,11 +102,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("❌ Compression cancelled.")
 
 async def post_init(application: Application):
-    """Called after the bot is ready, gets its own ID."""
-    global BOT_ID
+    """Called after the bot is ready, gets its username."""
+    global BOT_USERNAME
     me = await application.bot.get_me()
-    BOT_ID = me.id
-    print(f"Bot ID: {BOT_ID}")
+    BOT_USERNAME = me.username
+    print(f"Bot username: @{BOT_USERNAME}")
 
 def main():
     app = Application.builder().token(os.environ["TELEGRAM_BOT_TOKEN"]).post_init(post_init).build()
