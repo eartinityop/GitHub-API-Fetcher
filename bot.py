@@ -4,13 +4,11 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 
 # ========== CONFIGURE THESE ==========
-REPO = "eartinityop/compress"        # e.g., "johndoe/video-compressor"
-WF_FILE = "compress.yml"               # workflow file name
+REPO = "eartinityop/compress"
+WF_FILE = "compress.yml"
 GITHUB_TOKEN = os.environ["GITHUB_TOKEN"]
+CHANNEL_ID = -1003954251261   # <-- YOUR CHANNEL ID
 # =====================================
-
-# We'll store the bot's username after startup
-BOT_USERNAME = None
 
 # ---------- Health server for Render ----------
 class HealthHandler(BaseHTTPRequestHandler):
@@ -31,7 +29,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def video_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["msg_id"] = update.message.message_id
+    # Forward the video to the private channel
+    forwarded = await update.message.forward(CHANNEL_ID)
+    context.user_data["fwd_msg_id"] = forwarded.message_id
     context.user_data["user_id"] = update.message.chat_id
 
     keyboard = [
@@ -69,10 +69,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if data.startswith("quality_"):
         quality = data.split("_")[1]
-        msg_id = context.user_data.get("msg_id")
+        fwd_msg_id = context.user_data.get("fwd_msg_id")
         user_id = context.user_data.get("user_id")
 
-        if not msg_id or not user_id:
+        if not fwd_msg_id or not user_id:
             await query.edit_message_text("Error: Missing video info.")
             return
 
@@ -87,8 +87,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         payload = {
             "ref": "main",
             "inputs": {
-                "original_message_id": str(msg_id),
-                "bot_username": BOT_USERNAME,       # <-- using username
+                "channel_id": str(CHANNEL_ID),
+                "fwd_message_id": str(fwd_msg_id),
                 "user_id": str(user_id),
                 "quality": quality,
                 "message_id": str(progress_msg_id)
@@ -102,11 +102,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("❌ Compression cancelled.")
 
 async def post_init(application: Application):
-    """Called after the bot is ready, gets its username."""
-    global BOT_USERNAME
+    """Print bot info on startup."""
     me = await application.bot.get_me()
-    BOT_USERNAME = me.username
-    print(f"Bot username: @{BOT_USERNAME}")
+    print(f"Bot started as @{me.username}")
 
 def main():
     app = Application.builder().token(os.environ["TELEGRAM_BOT_TOKEN"]).post_init(post_init).build()
