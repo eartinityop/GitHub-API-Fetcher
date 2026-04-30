@@ -99,12 +99,5 @@ def main():
     app.add_handler(CallbackQueryHandler(button_handler))
     app.run_polling()
 
-def start_health_server():
-    port = int(os.environ.get("PORT", 8000))
-    server = HTTPServer(("0.0.0.0", port), HealthHandler)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-
 if __name__ == "__main__":
-    start_health_server()
     main()
