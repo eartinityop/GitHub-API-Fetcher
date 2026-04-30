@@ -7,7 +7,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQu
 REPO = "eartinityop/compress"
 WF_FILE = "compress.yml"
 GITHUB_TOKEN = os.environ["GITHUB_TOKEN"]
-CHANNEL_ID = -1003954251261   # <-- YOUR CHANNEL ID
+CHANNEL_USERNAME = compresslog   
 # =====================================
 
 # ---------- Health server for Render ----------
@@ -30,7 +30,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def video_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Forward the video to the private channel
-    forwarded = await update.message.forward(CHANNEL_ID)
+    forwarded = await update.message.forward(CHANNEL_USERNAME)
     context.user_data["fwd_msg_id"] = forwarded.message_id
     context.user_data["user_id"] = update.message.chat_id
 
@@ -87,7 +87,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         payload = {
             "ref": "main",
             "inputs": {
-                "channel_id": str(CHANNEL_ID),
+                "channel_username": str(CHANNEL_USERNAME),
                 "fwd_message_id": str(fwd_msg_id),
                 "user_id": str(user_id),
                 "quality": quality,
