@@ -4,10 +4,13 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 
 # ========== CONFIGURE THESE ==========
-REPO = "eartinityop/compress"        # e.g. "johndoe/video-compressor"
-WF_FILE = "compress.yml"               # workflow file name
+REPO = "eartinityop/compress"
+WF_FILE = "compress.yml"
 GITHUB_TOKEN = os.environ["GITHUB_TOKEN"]
 # =====================================
+
+# We'll store the bot's own user ID after startup
+BOT_ID = None
 
 # ---------- Health server for Render ----------
 class HealthHandler(BaseHTTPRequestHandler):
@@ -29,7 +32,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def video_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["msg_id"] = update.message.message_id
-    context.user_data["user_id"] = update.message.chat_id
+    context.user_data["user_id"] = update.message.chat_id   # your ID (still needed for sending progress)
 
     keyboard = [
         [InlineKeyboardButton("Compress this video ✅", callback_data="compress")],
@@ -85,7 +88,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "ref": "main",
             "inputs": {
                 "original_message_id": str(msg_id),
-                "user_id": str(user_id),
+                "bot_id": str(BOT_ID),          # <-- THE FIX
+                "user_id": str(user_id),        # still needed for progress updates
                 "quality": quality,
                 "message_id": str(progress_msg_id)
             }
@@ -97,13 +101,20 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "cancel_q":
         await query.edit_message_text("❌ Compression cancelled.")
 
+async def post_init(application: Application):
+    """Called after the bot is ready, gets its own ID."""
+    global BOT_ID
+    me = await application.bot.get_me()
+    BOT_ID = me.id
+    print(f"Bot ID: {BOT_ID}")
+
 def main():
-    app = Application.builder().token(os.environ["TELEGRAM_BOT_TOKEN"]).build()
+    app = Application.builder().token(os.environ["TELEGRAM_BOT_TOKEN"]).post_init(post_init).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.VIDEO, video_handler))
     app.add_handler(CallbackQueryHandler(button_handler))
     app.run_polling()
 
 if __name__ == "__main__":
-    start_health_server()   # <-- start the HTTP health server before the bot
+    start_health_server()
     main()
