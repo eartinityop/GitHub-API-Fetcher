@@ -30,7 +30,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def video_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Forward the video to the private channel
-    forwarded = await update.message.forward(f"@{CHANNEL_USERNAME})
+    forwarded = await update.message.forward(f"@{CHANNEL_USERNAME}")
     context.user_data["fwd_msg_id"] = forwarded.message_id
     context.user_data["user_id"] = update.message.chat_id
 
