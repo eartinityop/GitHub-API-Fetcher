@@ -1,14 +1,26 @@
-import os, requests
+import os, requests, threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
-from http.server import HTTPServer, BaseHTTPRequestHandler
-import threading
 
 # ========== CONFIGURE THESE ==========
-REPO = "eartinityop/compress"       # e.g. "johndoe/video-compressor"
+REPO = "eartinityop/compress"        # e.g. "johndoe/video-compressor"
 WF_FILE = "compress.yml"               # workflow file name
 GITHUB_TOKEN = os.environ["GITHUB_TOKEN"]
 # =====================================
+
+# ---------- Health server for Render ----------
+class HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"OK")
+
+def start_health_server():
+    port = int(os.environ.get("PORT", 8000))
+    server = HTTPServer(("0.0.0.0", port), HealthHandler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+# -----------------------------------------------
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
@@ -16,9 +28,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def video_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Store original message_id and user_id (the user's private chat ID)
     context.user_data["msg_id"] = update.message.message_id
-    context.user_data["user_id"] = update.message.chat_id   # e.g., 123456789 (positive number)
+    context.user_data["user_id"] = update.message.chat_id
 
     keyboard = [
         [InlineKeyboardButton("Compress this video ✅", callback_data="compress")],
@@ -62,11 +73,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text("Error: Missing video info.")
             return
 
-        # Progress message
         sent_msg = await query.message.reply_text("⏳ Triggering workflow...")
         progress_msg_id = sent_msg.message_id
 
-        # GitHub trigger
         url = f"https://api.github.com/repos/{REPO}/actions/workflows/{WF_FILE}/dispatches"
         headers = {
             "Authorization": f"token {GITHUB_TOKEN}",
@@ -96,4 +105,5 @@ def main():
     app.run_polling()
 
 if __name__ == "__main__":
+    start_health_server()   # <-- start the HTTP health server before the bot
     main()
