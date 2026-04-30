@@ -7,7 +7,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQu
 REPO = "eartinityop/compress"
 WF_FILE = "compress.yml"
 GITHUB_TOKEN = os.environ["GITHUB_TOKEN"]
-CHANNEL_USERNAME = "compresslog"   
+CHANNEL_USERNAME = "compresslog"
 # =====================================
 
 # ---------- Health server for Render ----------
@@ -76,8 +76,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text("Error: Missing video info.")
             return
 
-        sent_msg = await query.message.reply_text("⏳ Triggering workflow...")
-        progress_msg_id = sent_msg.message_id
+        # ✅ EDIT the same quality‑selection message → "Triggering workflow"
+        await query.edit_message_text("⏳ Triggering workflow...")
+        progress_msg_id = query.message.message_id
 
         url = f"https://api.github.com/repos/{REPO}/actions/workflows/{WF_FILE}/dispatches"
         headers = {
@@ -96,7 +97,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         }
         resp = requests.post(url, json=payload, headers=headers)
         if resp.status_code != 204:
-            await sent_msg.edit_text(f"❌ Workflow trigger failed: {resp.status_code} {resp.text}")
+            await query.edit_message_text(f"❌ Workflow trigger failed: {resp.status_code} {resp.text}")
 
     elif data == "cancel_q":
         await query.edit_message_text("❌ Compression cancelled.")
@@ -116,6 +117,7 @@ async def test(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     app = Application.builder().token(os.environ["TELEGRAM_BOT_TOKEN"]).post_init(post_init).build()
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("test", test))
     app.add_handler(MessageHandler(filters.VIDEO, video_handler))
     app.add_handler(CallbackQueryHandler(button_handler))
     app.run_polling()
