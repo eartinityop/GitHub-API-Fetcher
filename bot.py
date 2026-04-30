@@ -1,15 +1,16 @@
-import os, requests, asyncio
+import os, requests
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import threading
 
 
-# ----- CONFIGURE THESE -----
-REPO = "eartinityop/compress"                # e.g., "mohitkumar/video-compressor"
-WF_FILE = "compress.yml"             # workflow file name inside .github/workflows/
+# ========== CONFIGURE THESE ==========
+REPO = "eartinityop/compress"        # e.g. "johndoe/video-compressor"
+WF_FILE = "compress.yml"               # workflow file name
 GITHUB_TOKEN = os.environ["GITHUB_TOKEN"]
-# ---------------------------
+GROUP_CHAT_ID = -1003971999326        # your private group ID (negative for supergroup)
+# =====================================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
@@ -17,8 +18,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def video_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    video = update.message.video
-    context.user_data["file_id"] = video.file_id
+    # Forward the video to the private group (NO download)
+    forwarded = await update.message.forward(GROUP_CHAT_ID)
+    context.user_data["fwd_msg_id"] = forwarded.message_id
     context.user_data["chat_id"] = update.message.chat_id
 
     keyboard = [
@@ -40,7 +42,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if data == "compress":
-        # Show quality options
         keyboard = [
             [InlineKeyboardButton("240p", callback_data="quality_240"),
              InlineKeyboardButton("360p", callback_data="quality_360")],
@@ -57,38 +58,35 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if data.startswith("quality_"):
         quality = data.split("_")[1]
-        file_id = context.user_data.get("file_id")
-        chat_id = context.user_data.get("chat_id")
+        fwd_msg_id = context.user_data.get("fwd_msg_id")
+        user_chat_id = context.user_data.get("chat_id")
 
-        if not file_id or not chat_id:
+        if not fwd_msg_id or not user_chat_id:
             await query.edit_message_text("Error: Missing video info.")
             return
 
         # Send a new message that will be updated by the workflow
         sent_msg = await query.message.reply_text("⏳ Triggering workflow...")
-        message_id = sent_msg.message_id
+        progress_msg_id = sent_msg.message_id
 
-        # Trigger GitHub Actions
+        # Trigger GitHub Actions workflow
         url = f"https://api.github.com/repos/{REPO}/actions/workflows/{WF_FILE}/dispatches"
         headers = {
             "Authorization": f"token {GITHUB_TOKEN}",
             "Accept": "application/vnd.github+json"
         }
         payload = {
-            "ref": "main",    # or your default branch
+            "ref": "main",   # your branch
             "inputs": {
-                "file_id": file_id,
-                "chat_id": str(chat_id),
+                "fwd_message_id": str(fwd_msg_id),
+                "group_chat_id": str(GROUP_CHAT_ID),
+                "user_chat_id": str(user_chat_id),
                 "quality": quality,
-                "message_id": str(message_id)
+                "message_id": str(progress_msg_id)
             }
         }
         resp = requests.post(url, json=payload, headers=headers)
-
-        if resp.status_code == 204:
-            # The workflow will now edit this message with progress
-            pass
-        else:
+        if resp.status_code != 204:
             await sent_msg.edit_text(f"❌ Workflow trigger failed: {resp.status_code} {resp.text}")
 
     elif data == "cancel_q":
@@ -100,12 +98,6 @@ def main():
     app.add_handler(MessageHandler(filters.VIDEO, video_handler))
     app.add_handler(CallbackQueryHandler(button_handler))
     app.run_polling()
-
-class HealthHandler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(b"OK")
 
 def start_health_server():
     port = int(os.environ.get("PORT", 8000))
