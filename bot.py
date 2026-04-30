@@ -56,7 +56,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # --- Cancel a running workflow ---
     if data.startswith("cancel_run_"):
-        run_id = data.split("_", 2)[2]  # format: cancel_run_<run_id>
+        run_id = data.split("_", 2)[2]
         url = f"https://api.github.com/repos/{REPO}/actions/runs/{run_id}/cancel"
         headers = {
             "Authorization": f"token {GITHUB_TOKEN}",
@@ -66,7 +66,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if resp.status_code == 202:
             await query.edit_message_text("❌ Process cancelled by user.")
         else:
-            # Show the error from GitHub (e.g., run already completed)
             error_msg = resp.json().get("message", "Unknown error")
             await query.edit_message_text(f"❌ Cancellation failed: {error_msg}")
         return
@@ -92,7 +91,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # --- Trigger workflow and show progress with cancel button ---
+    # --- Trigger workflow → same message becomes progress tracker ---
     if data.startswith("quality_"):
         quality = data.split("_")[1]
         fwd_msg_id = context.user_data.get("fwd_msg_id")
@@ -103,15 +102,15 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text("Error: Missing video info.")
             return
 
-        # Send progress message with "Cancel ❌" button
+        # EDIT the same message: remove quality buttons, add "Triggering workflow" + cancel button
         cancel_keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("Cancel ❌", callback_data="cancel_pending")]
         ])
-        progress_msg = await query.message.reply_text(
+        await query.edit_message_text(
             "⏳ Triggering workflow...",
             reply_markup=cancel_keyboard
         )
-        progress_msg_id = progress_msg.message_id
+        progress_msg_id = query.message.message_id
 
         # Trigger workflow via GitHub API
         url = f"https://api.github.com/repos/{REPO}/actions/workflows/{WF_FILE}/dispatches"
@@ -132,10 +131,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         }
         resp = requests.post(url, json=payload, headers=headers)
         if resp.status_code != 204:
-            await progress_msg.edit_text(f"❌ Workflow trigger failed: {resp.status_code} {resp.text}")
+            await query.edit_message_text(f"❌ Workflow trigger failed: {resp.status_code} {resp.text}")
             return
 
-        # Get the newly created run ID
+        # Get the newly created run ID and update the cancel button
         runs_url = f"https://api.github.com/repos/{REPO}/actions/runs?event=workflow_dispatch&per_page=1"
         runs_resp = requests.get(runs_url, headers=headers)
         run_id = None
@@ -146,17 +145,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if run_id:
             RUN_IDS[(user_id, progress_msg_id)] = run_id
-            # Update button to include the real run ID
             new_keyboard = InlineKeyboardMarkup([
                 [InlineKeyboardButton("Cancel ❌", callback_data=f"cancel_run_{run_id}")]
             ])
-            await progress_msg.edit_reply_markup(reply_markup=new_keyboard)
-        else:
-            # If we can't get run ID, keep the placeholder (button will just fail gracefully)
-            pass
-
-        # Edit the quality‑selection message to show it's been triggered
-        await query.edit_message_text("⏳ Workflow triggered...")
+            await query.edit_message_reply_markup(reply_markup=new_keyboard)
 
     elif data == "cancel_q":
         await query.edit_message_text("❌ Compression cancelled.")
