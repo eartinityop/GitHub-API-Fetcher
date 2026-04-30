@@ -106,6 +106,13 @@ async def post_init(application: Application):
     me = await application.bot.get_me()
     print(f"Bot started as @{me.username}")
 
+async def test(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        msg = await context.bot.send_message(chat_id="compresslog", text="Bot is alive!")
+        await update.message.reply_text(f"✅ Message sent to channel: {msg.message_id}")
+    except Exception as e:
+        await update.message.reply_text(f"❌ Error: {e}")
+
 def main():
     app = Application.builder().token(os.environ["TELEGRAM_BOT_TOKEN"]).post_init(post_init).build()
     app.add_handler(CommandHandler("start", start))
