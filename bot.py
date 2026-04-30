@@ -1,6 +1,9 @@
 import os, requests, asyncio
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
+from http.server import HTTPServer, BaseHTTPRequestHandler
+import threading
+
 
 # ----- CONFIGURE THESE -----
 REPO = "eartinityop/compress"                # e.g., "mohitkumar/video-compressor"
@@ -98,5 +101,18 @@ def main():
     app.add_handler(CallbackQueryHandler(button_handler))
     app.run_polling()
 
+class HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"OK")
+
+def start_health_server():
+    port = int(os.environ.get("PORT", 8000))
+    server = HTTPServer(("0.0.0.0", port), HealthHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+
 if __name__ == "__main__":
+    start_health_server()
     main()
