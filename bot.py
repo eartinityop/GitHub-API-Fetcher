@@ -10,8 +10,8 @@ GITHUB_TOKEN = os.environ["GITHUB_TOKEN"]
 CHANNEL_USERNAME = "compresslog"
 # =====================================
 
-# Store workflow run IDs for cancellation: {(chat_id, progress_msg_id): run_id}
 RUN_IDS = {}
+BOT_ID = None   # will be set at startup
 
 # ---------- Health server for Render ----------
 class HealthHandler(BaseHTTPRequestHandler):
@@ -32,10 +32,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def video_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Save the original message ID (in user's chat) for reply
     context.user_data["original_msg_id"] = update.message.message_id
-
-    # Forward video to private channel
     forwarded = await update.message.forward(f"@{CHANNEL_USERNAME}")
     context.user_data["fwd_msg_id"] = forwarded.message_id
     context.user_data["user_id"] = update.message.chat_id
@@ -54,7 +51,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     data = query.data
 
-    # --- Cancel a running workflow ---
     if data.startswith("cancel_run_"):
         run_id = data.split("_", 2)[2]
         url = f"https://api.github.com/repos/{REPO}/actions/runs/{run_id}/cancel"
@@ -70,12 +66,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text(f"❌ Cancellation failed: {error_msg}")
         return
 
-    # --- Cancel before workflow trigger ---
     if data == "cancel":
         await query.edit_message_text("❌ Process cancelled.")
         return
 
-    # --- Show quality options ---
     if data == "compress":
         keyboard = [
             [InlineKeyboardButton("240p", callback_data="quality_240"),
@@ -91,7 +85,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # --- Trigger workflow → same message becomes progress tracker ---
     if data.startswith("quality_"):
         quality = data.split("_")[1]
         fwd_msg_id = context.user_data.get("fwd_msg_id")
@@ -102,7 +95,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text("Error: Missing video info.")
             return
 
-        # EDIT the same message: remove quality buttons, add "Triggering workflow" + cancel button
         cancel_keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("Cancel ❌", callback_data="cancel_pending")]
         ])
@@ -112,7 +104,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         progress_msg_id = query.message.message_id
 
-        # Trigger workflow via GitHub API
         url = f"https://api.github.com/repos/{REPO}/actions/workflows/{WF_FILE}/dispatches"
         headers = {
             "Authorization": f"token {GITHUB_TOKEN}",
@@ -126,7 +117,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "user_id": str(user_id),
                 "quality": quality,
                 "message_id": str(progress_msg_id),
-                "original_message_id": str(original_msg_id)
+                "original_message_id": str(original_msg_id),
+                "bot_id": str(BOT_ID)                # <-- new: bot's numeric ID
             }
         }
         resp = requests.post(url, json=payload, headers=headers)
@@ -134,7 +126,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text(f"❌ Workflow trigger failed: {resp.status_code} {resp.text}")
             return
 
-        # Get the newly created run ID and update the cancel button
         runs_url = f"https://api.github.com/repos/{REPO}/actions/runs?event=workflow_dispatch&per_page=1"
         runs_resp = requests.get(runs_url, headers=headers)
         run_id = None
@@ -154,8 +145,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("❌ Compression cancelled.")
 
 async def post_init(application: Application):
+    global BOT_ID
     me = await application.bot.get_me()
-    print(f"Bot started as @{me.username}")
+    BOT_ID = me.id
+    print(f"Bot started as @{me.username} (ID: {BOT_ID})")
 
 async def test(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
