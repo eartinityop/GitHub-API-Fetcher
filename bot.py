@@ -8,10 +8,10 @@ REPO = "eartinityop/compress"
 WF_FILE = "compress.yml"
 GITHUB_TOKEN = os.environ["GITHUB_TOKEN"]
 CHANNEL_USERNAME = "compresslog"
+BOT_USERNAME = "Eartinityvidcomp_bot"   # without @
 # =====================================
 
 RUN_IDS = {}
-BOT_ID = None   # will be set at startup
 
 # ---------- Health server for Render ----------
 class HealthHandler(BaseHTTPRequestHandler):
@@ -118,7 +118,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "quality": quality,
                 "message_id": str(progress_msg_id),
                 "original_message_id": str(original_msg_id),
-                "bot_id": str(BOT_ID)                # <-- new: bot's numeric ID
+                "bot_username": BOT_USERNAME       # <-- username for upload
             }
         }
         resp = requests.post(url, json=payload, headers=headers)
@@ -145,10 +145,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("❌ Compression cancelled.")
 
 async def post_init(application: Application):
-    global BOT_ID
     me = await application.bot.get_me()
-    BOT_ID = me.id
-    print(f"Bot started as @{me.username} (ID: {BOT_ID})")
+    print(f"Bot started as @{me.username}")
 
 async def test(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
